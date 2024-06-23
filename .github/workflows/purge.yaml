@@ -1,0 +1,36 @@
+on:
+  push:
+    branches: [ master ]
+  schedule:
+  - cron: '27 5 * * *'
+  
+jobs:
+  sync-rss:
+    name: Skeeter Deleter
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: false
+        fetch-depth: 0    # Fetch all history for .GitInfo and .Lastmod
+
+    - name: Install python requirements
+      run: |
+        apt-get install libmagic1
+        pip install -r requirements.txt
+        mkdir archive
+
+    - name: Purge skeets
+      env:
+        BLUESKY_USERNAME: ${{ secrets.BLUESKY_USERNAME }}
+        BLUESKY_PASSWORD: ${{ secrets.BLUESKY_PASSWORD }}
+      run: |
+        python skeeter-deleter.py -l 100 -s 7 -d emilygorcenski.com -c 3k2njt2njcr2f -v -y
+
+    - name: Archive current rss
+      uses: actions/upload-artifact@v4
+      with:
+        name: rss-current
+        path: |
+          archive
