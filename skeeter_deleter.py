@@ -153,7 +153,7 @@ class SkeeterDeleter:
         clean_user_did = self.client.me.did.replace(":", "_")
         Path(f"archive/{clean_user_did}/_blob/").mkdir(parents=True, exist_ok=True)
         print("Archiving posts...")
-        with open(f"archive/{clean_user_did}/bsky-archive-{datetime.isoformat(now, timespec="YYYY-MM-DD HH.mm.ss")}.car", "wb") as f:
+        with open(f"archive/{clean_user_did}/bsky-archive-{now.isoformat().replace(":", "_")}.car", "wb") as f:
             f.write(repo)
 
         cursor = None
