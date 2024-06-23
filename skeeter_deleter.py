@@ -150,9 +150,10 @@ class SkeeterDeleter:
     def archive_repo(self, now, **kwargs):
         repo = self.client.com.atproto.sync.get_repo(params={'did': self.client.me.did})
         car = CAR.from_bytes(repo)
-        Path(f"archive/{self.client.me.did}/_blob/").mkdir(parents=True, exist_ok=True)
+        clean_user_did = self.client.me.did.replace(":", "_")
+        Path(f"archive/{clean_user_did}/_blob/").mkdir(parents=True, exist_ok=True)
         print("Archiving posts...")
-        with open(f"archive/{self.client.me.did}/bsky-archive-{datetime.isoformat(now)}.car", "wb") as f:
+        with open(f"archive/{clean_user_did}/bsky-archive-{datetime.isoformat(now)}.car", "wb") as f:
             f.write(repo)
 
         cursor = None
