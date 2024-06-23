@@ -164,7 +164,7 @@ class SkeeterDeleter:
                 blob = self.client.com.atproto.sync.get_blob(params={'cid': cid, 'did': self.client.me.did})
                 type = magic.from_buffer(blob, 2048)
                 ext = ".jpeg" if type == "image/jpeg" else ""
-                with open(f"archive/{self.client.me.did}/_blob/{cid}{ext}", "wb") as f:
+                with open(f"archive/{clean_user_did}/_blob/{cid}{ext}", "wb") as f:
                     if self.verbosity == 2:
                         print(f"Saving {cid}{ext}")
                     f.write(blob)
