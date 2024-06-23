@@ -181,6 +181,8 @@ class SkeeterDeleter:
                  autodelete : bool=False):
         self.client = Client()
         self.client.login(**credentials.dict())
+
+        # the parameters are a mess, sorry, this is a to-fix
         params = {
             'viral_threshold': viral_threshold,
             'stale_threshold': stale_threshold,
