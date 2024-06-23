@@ -17,7 +17,7 @@ jobs:
 
     - name: Install python requirements
       run: |
-        apt-get install libmagic1
+        sudo apt-get install libmagic1
         pip install -r requirements.txt
         mkdir archive
 
