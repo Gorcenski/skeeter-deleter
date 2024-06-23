@@ -34,3 +34,18 @@ jobs:
         name: bsky-archive
         path: |
           archive
+
+    - uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+  
+    - name: Upload to blob storage
+      uses: azure/CLI@v1
+      with:
+          azcliversion: 2.30.0
+          inlineScript: |
+              az storage blob sync --account-name efgblogstore -c '$archive' -s archive/.
+
+    - name: logout
+      run: |
+          az logout
