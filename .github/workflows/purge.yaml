@@ -44,7 +44,7 @@ jobs:
       with:
           azcliversion: 2.30.0
           inlineScript: |
-              az storage blob sync --account-name efgblogstore -c '$archive' -s archive/.
+              az storage blob sync --account-name efgblogstore -c 'archive' -s archive/.
 
     - name: logout
       run: |
