@@ -252,8 +252,8 @@ default="")
     elif args.very_verbose:
         verbosity = 2
     params = {
-        'viral_threshold': args.max_reposts,
-        'stale_threshold': args.stale_limit,
+        'viral_threshold': max([0, args.max_reposts]),
+        'stale_threshold': max([0, args.stale_limit]),
         'domains_to_protect': [s.strip() for s in args.domains_to_protect.split(",")],
         'fixed_likes_cursor': args.fixed_likes_cursor,
         'verbosity': verbosity,
