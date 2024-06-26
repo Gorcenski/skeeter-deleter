@@ -59,11 +59,11 @@ class PostQualifier(models.AppBskyFeedDefs.FeedViewPost):
         self.client.delete_like(self.post.viewer.like)
 
     def remove(self):
-        if self.post.author.handle != self.client.me.did:
+        if self.post.author.did != self.client.me.did:
             try:
                 self.client.unrepost(self.post.viewer.repost)
             except:
-                print(f"Failed to unrepost: {self.post.viewer.repost}")
+                print(f"Failed to unrepost: {self.post}")
         else:
             try:
                 self.client.delete_post(self.post.uri)
