@@ -60,9 +60,15 @@ class PostQualifier(models.AppBskyFeedDefs.FeedViewPost):
 
     def remove(self):
         if self.post.author.handle != self.client.me.did:
-            self.client.unrepost(self.post.viewer.repost)
+            try:
+                self.client.unrepost(self.post.viewer.repost)
+            except:
+                print(f"Failed to unrepost: {self.post.viewer.repost}")
         else:
-            self.client.delete_post(self.post.uri)
+            try:
+                self.client.delete_post(self.post.uri)
+            except:
+                print(f"Failed to delete: {self.post.uri}")
 
     @staticmethod
     def to_delete(viral_threshold, stale_threshold, domains_to_protect, now, post):
