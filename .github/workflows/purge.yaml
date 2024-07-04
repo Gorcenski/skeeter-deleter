@@ -26,7 +26,7 @@ jobs:
         BLUESKY_USERNAME: ${{ secrets.BLUESKY_USERNAME }}
         BLUESKY_PASSWORD: ${{ secrets.BLUESKY_PASSWORD }}
       run: |
-        python skeeter_deleter.py -l 100 -s 7 -d emilygorcenski.com -c 3k2njt2njcr2f -v -y
+        python skeeter_deleter.py -l 100 -s 2 -d emilygorcenski.com -c 3k2njt2njcr2f -v -y
 
     - name: Archive current rss
       uses: actions/upload-artifact@v4
