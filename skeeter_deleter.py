@@ -235,7 +235,7 @@ Defaults to 0.""", default=0, type=int)
 Ignore or set to 0 to not set an upper limit. This feature deletes old posts that may be taken out of context or selectively
 misinterpreted, reducing potential harassment. Detaults to 0.""", default=0, type=int)
     parser.add_argument("-d", "--domains-to-protect", help="""A comma separated list of domain names to protect. Posts linking to
-domains in this list will not be auto-deleted regardless of age or virality. Default is empty.""", default=[])
+domains in this list will not be auto-deleted regardless of age or virality. Default is empty.""", default="")
     parser.add_argument("-c", "--fixed-likes-cursor", help="""A complex setting. ATProto pagination through is awkward, and
 it will page through the entire history of your account even if there are no likes to be found. This can make the process take
 a long time to complete. If you have already purged likes, it's possible to simply set a token at a reasonable point in the recent
