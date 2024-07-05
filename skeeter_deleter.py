@@ -222,7 +222,8 @@ class SkeeterDeleter:
 
     def unlike(self):
         n_unlike = len(self.to_unlike)
-        if not self.autodelete:
+        prompt = None
+        while not self.autodelete and prompt not in ("Y", "n"):
             prompt = input(f"""
 Proceed to unlike {n_unlike} post{'' if n_unlike == 1 else 's'}? WARNING: THIS IS DESTRUCTIVE AND CANNOT BE UNDONE. Y/n: """)
         if self.autodelete or prompt == "Y":
@@ -230,7 +231,8 @@ Proceed to unlike {n_unlike} post{'' if n_unlike == 1 else 's'}? WARNING: THIS I
 
     def delete(self):
         n_delete = len(self.to_delete)
-        if not self.autodelete:
+        prompt = None
+        while not self.autodelete and prompt not in ("Y", "n"):
             prompt = input(f"""
 Proceed to delete {n_delete} post{'' if n_delete == 1 else 's'}? WARNING: THIS IS DESTRUCTIVE AND CANNOT BE UNDONE. Y/n: """)
         if self.autodelete or prompt == "Y":
