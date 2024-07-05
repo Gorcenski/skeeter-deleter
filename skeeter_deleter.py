@@ -7,7 +7,7 @@ import rich.progress
 from atproto import CAR, Client, models
 from atproto_client.request import Request
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from pathlib import Path
 
@@ -25,7 +25,7 @@ class PostQualifier(models.AppBskyFeedDefs.FeedViewPost):
     def is_stale(self, stale_threshold, now) -> bool:
         if stale_threshold == 0:
             return False
-        return dateutil.parser.parse(self.post.record.created_at) <= \
+        return dateutil.parser.parse(self.post.record.created_at).replace(tzinfo=timezone.utc) <= \
             now - timedelta(days=stale_threshold)
 
     def is_protected_domain(self, domains_to_protect) -> bool:
@@ -207,7 +207,7 @@ class SkeeterDeleter:
             'stale_threshold': stale_threshold,
             'domains_to_protect': domains_to_protect,
             'fixed_likes_cursor': fixed_likes_cursor,
-            'now': datetime.now(pytz.UTC),
+            'now': datetime.now(timezone.utc),
         }
         self.verbosity = verbosity
         self.autodelete = autodelete
