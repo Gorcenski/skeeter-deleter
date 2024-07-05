@@ -2,7 +2,7 @@ import argparse
 import dateutil.parser
 import magic
 import os
-import pytz
+import rich.progress
 from atproto import CAR, Client, models
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
@@ -140,7 +140,7 @@ class SkeeterDeleter:
     def batch_unlike_posts(self) -> None:
         if self.verbosity > 0:
             print(f"Unliking {len(self.to_unlike)} post{'' if len(self.to_unlike) == 1 else 's'}")
-        for post in self.to_unlike:
+        for post in rich.progress.track(self.to_unlike):
             if self.verbosity == 2:
                 print(f"Unliking: {post.post.record.post} by {post.post.author.handle}, CID: {post.post.cid}")
             post.delete_like()
@@ -148,7 +148,7 @@ class SkeeterDeleter:
     def batch_delete_posts(self) -> None:
         if self.verbosity > 0:
             print(f"Deleting {len(self.to_unlike)} post{'' if len(self.to_unlike) == 1 else 's'}")
-        for post in self.to_delete:
+        for post in rich.progress.track(self.to_delete):
             if self.verbosity == 2:
                 print(f"Deleting: {post.post.record.post} on {post.post.record.created_at}, CID: {post.post.cid}")
             post.remove()
@@ -165,19 +165,21 @@ class SkeeterDeleter:
 
         cursor = None
         print("Downloading and archiving media...")
+        blob_cids = []
         while True:
-            blobs = self.client.com.atproto.sync.list_blobs(params={'did': self.client.me.did, 'cursor': cursor})
-            for cid in blobs.cids:
-                blob = self.client.com.atproto.sync.get_blob(params={'cid': cid, 'did': self.client.me.did})
-                type = magic.from_buffer(blob, 2048)
-                ext = ".jpeg" if type == "image/jpeg" else ""
-                with open(f"archive/{clean_user_did}/_blob/{cid}{ext}", "wb") as f:
-                    if self.verbosity == 2:
-                        print(f"Saving {cid}{ext}")
-                    f.write(blob)
-            cursor = blobs.cursor
+            blob_page = self.client.com.atproto.sync.list_blobs(params={'did': self.client.me.did, 'cursor': cursor})
+            blob_cids.extend(blob_page.cids)
+            cursor = blob_page.cursor
             if not cursor:
                 break
+        for cid in rich.progress.track(blob_cids):
+            blob = self.client.com.atproto.sync.get_blob(params={'cid': cid, 'did': self.client.me.did})
+            type = magic.from_buffer(blob, 2048)
+            ext = ".jpeg" if type == "image/jpeg" else ""
+            with open(f"archive/{clean_user_did}/_blob/{cid}{ext}", "wb") as f:
+                if self.verbosity == 2:
+                    print(f"Saving {cid}{ext}")
+                f.write(blob)
 
     def __init__(self,
                  credentials : Credentials,
