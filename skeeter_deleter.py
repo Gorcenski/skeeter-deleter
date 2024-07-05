@@ -1,9 +1,11 @@
 import argparse
 import dateutil.parser
+import httpx
 import magic
 import os
 import rich.progress
 from atproto import CAR, Client, models
+from atproto_client.request import Request
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 from functools import partial
@@ -95,6 +97,13 @@ class Credentials:
     password: str
 
     dict = asdict
+
+
+class RequestCustomTimeout(Request):
+    def __init__(self, timeout: httpx.Timeout = httpx.Timeout(120), *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._client = httpx.Client(follow_redirects=True, timeout=timeout)
+
 
 class SkeeterDeleter:
 
@@ -189,7 +198,7 @@ class SkeeterDeleter:
                  fixed_likes_cursor : str=None,
                  verbosity : int=0,
                  autodelete : bool=False):
-        self.client = Client()
+        self.client = Client(request=RequestCustomTimeout())
         self.client.login(**credentials.dict())
 
         # the parameters are a mess, sorry, this is a to-fix
