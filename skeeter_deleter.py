@@ -156,7 +156,7 @@ class SkeeterDeleter:
 
     def batch_delete_posts(self) -> None:
         if self.verbosity > 0:
-            print(f"Deleting {len(self.to_unlike)} post{'' if len(self.to_unlike) == 1 else 's'}")
+            print(f"Deleting {len(self.to_delete)} post{'' if len(self.to_delete) == 1 else 's'}")
         for post in rich.progress.track(self.to_delete):
             if self.verbosity == 2:
                 print(f"Deleting: {post.post.record.post} on {post.post.record.created_at}, CID: {post.post.cid}")
