@@ -1,6 +1,6 @@
 annotated-types==0.7.0
 anyio==4.4.0
-atproto==0.0.49
+atproto==0.0.54
 Authlib==1.3.1
 certifi==2024.6.2
 cffi==1.16.0
