@@ -15,7 +15,7 @@ h11==0.14.0
 httpcore==1.0.5
 httpx==0.26.0
 idna==3.7
-libipld==1.2.3
+libipld==2.0.0
 markdown-it-py==3.0.0
 marshmallow==3.21.3
 mdurl==0.1.2
