@@ -28,6 +28,23 @@ jobs:
       run: |
         python skeeter_deleter.py -l 100 -s 2 -d emilygorcenski.com -c 3k2njt2njcr2f -v -y
 
+    ## Various cloud-based archival options here
+    ## If you don't want to archive in the cloud, then simply comment these sections out or remove them
+    ## Alternatively, set up Github secrets for the following fields to leverage these storage options
+    - name: Setup Exoscale
+      uses: nhedger/setup-exoscale@v3.0.0
+      with:
+        version: "latest"
+        zone: "${{ secrets.EXOSCALE_ZONE }}"
+        account: "${{ secrets.EXOSCALE_ACCOUNT_NAME }}"
+        key: "${{ secrets.EXOSCALE_API_KEY }}"
+        secret: "${{ secrets.EXOSCALE_API_SECRET }}"
+
+    - name: Upload to Exoscale
+      run: exo storage upload -r archive/ sos://efg-social-archive/bsky/
+
+    ## Use Github Actions archive
+    ## Will only retain the last 500 or so runs
     - name: Archive current rss
       uses: actions/upload-artifact@v4
       with:
@@ -35,17 +52,19 @@ jobs:
         path: |
           archive
 
-    - uses: azure/login@v1
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIAL }}
+    ## Use Azure Storage
+    ## You'll need to set up an Azure account and create an Azure storage bucket
+    # - uses: azure/login@v1
+    #   with:
+    #     creds: ${{ secrets.AZURE_CREDENTIAL }}
   
-    - name: Upload to blob storage
-      uses: azure/CLI@v1
-      with:
-          azcliversion: 2.30.0
-          inlineScript: |
-              az storage blob sync --account-name efgblogstore -c 'archive' -s archive/.
+    # - name: Upload to blob storage
+    #   uses: azure/CLI@v1
+    #   with:
+    #       azcliversion: 2.30.0
+    #       inlineScript: |
+    #           az storage blob sync --account-name ${{ secrets.AZURE_STORAGE_BUCKET }} -c 'archive' -s archive/.
 
-    - name: logout
-      run: |
-          az logout
+    # - name: logout
+    #   run: |
+    #       az logout
