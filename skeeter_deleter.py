@@ -58,7 +58,10 @@ class PostQualifier(models.AppBskyFeedDefs.FeedViewPost):
         self.client = client
 
     def delete_like(self):
-        self.client.delete_like(self.post.viewer.like)
+        try:
+            self.client.delete_like(self.post.viewer.like)
+        except:
+            print(f"Failed to unlike: {self.post}")
 
     def remove(self):
         if self.post.author.did != self.client.me.did:
