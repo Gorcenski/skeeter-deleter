@@ -85,8 +85,8 @@ class PostQualifier(models.AppBskyFeedDefs.PostView):
         Remove a like from a post
         """
         try:
-            logging.info(f"Removing like: {self.viewer.like}")
-            self.client.delete_like(self.viewer.like)
+            logging.info(f"Removing like: {self.uri}")
+            self.client.delete_like(self.uri)
         except httpx.HTTPStatusError as e:
             logging.error(f"HTTP error occurred while unliking: {e}")
         except Exception as e:
@@ -457,7 +457,9 @@ default="")
     params = {
         'viral_threshold': max([0, args.max_reposts]),
         'stale_threshold': max([0, args.stale_limit]),
-        'domains_to_protect': [s.strip() for s in args.domains_to_protect.split(",")],
+        'domains_to_protect': ([] if args.domains_to_protect == ""
+                               else [s.strip() 
+                                     for s in args.domains_to_protect.split(",")]),
         'fixed_likes_cursor': args.fixed_likes_cursor,
         'verbosity': verbosity,
         'autodelete': args.yes
