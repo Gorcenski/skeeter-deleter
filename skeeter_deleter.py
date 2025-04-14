@@ -1,54 +1,77 @@
 import argparse
 import dateutil.parser
 import httpx
+import logging
 import magic
 import os
 import rich.progress
 from atproto import CAR, Client, models
+from atproto_core.cid import CID
 from atproto_client.request import Request
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta, timezone
 from functools import partial
 from pathlib import Path
 
-class PostQualifier(models.AppBskyFeedDefs.FeedViewPost):
-    # This class wraps the ATProto FeedViewPost instance of a post, as returned from the feed
-    # The rationale here is to separate post-related business logic (e.g. age heuristics, virality)
-    # from feed-related business logic
-    #
-    # These filters are customizable, or new filters can be added here
+logging.basicConfig(filename='skeeter_deleter.log', level=logging.INFO,
+                    format='%(asctime)s %(levelname)s:%(message)s')
+
+class PostQualifier(models.AppBskyFeedDefs.PostView):
+    """
+    This class wraps the ATProto PostView instance of a post, as returned from a list of posts
+    The rationale here is to separate post-related business logic (e.g. age heuristics, virality)
+    from feed-related business logic
+    
+    These filters are customizable, or new filters can be added here
+    """
     def is_viral(self, viral_threshold) -> bool:
+        """
+        Check if the post is viral based on the repost count.
+        Args:
+            viral_threshold (int): The threshold for considering a post viral.
+        Returns:
+            bool: True if the post is viral, False otherwise.
+        """
         if viral_threshold == 0:
             return False
-        return self.post.repost_count >= viral_threshold
+        return self.repost_count >= viral_threshold
 
     def is_stale(self, stale_threshold, now) -> bool:
+        """
+        Check if the post is stale based on its age.
+        Args:
+            stale_threshold (int): The threshold for considering a post stale.
+            now (datetime): The current time.
+        Returns:
+            bool: True if the post is stale, False otherwise.
+        """
         if stale_threshold == 0:
             return False
-        return dateutil.parser.parse(self.post.record.created_at).replace(tzinfo=timezone.utc) <= \
+        return dateutil.parser.parse(self.record.created_at).replace(tzinfo=timezone.utc) <= \
             now - timedelta(days=stale_threshold)
 
     def is_protected_domain(self, domains_to_protect) -> bool:
-        return hasattr(self.post.embed, "external") and \
-            any([uri in self.post.embed.external.uri for uri in domains_to_protect])
+        """
+        Check if the post contains links to protected domains.
+        Args:
+            domains_to_protect (list): List of domains to protect.
+        Returns:
+            bool: True if the post contains links to protected domains, False otherwise.
+        """
+        return hasattr(self.embed, "external") and \
+            any([uri in self.embed.external.uri for uri in domains_to_protect])
         
-    def is_self_liked(self) -> bool:
-        # This looks through a post's likes to see if the author herself liked it, so that it won't
-        # be deleted. This is used for both likes and posts, and it's probably inefficient to do so.
-        # A candidate for a future refactor.
-        lc = None
-        while True:
-            likes = self.client.app.bsky.feed.get_likes(params={
-                'uri': self.post.uri,
-                'cursor': lc,
-                'limit': 100})
-            lc = likes.cursor
-            if self.client.me.did in [l.actor.did for l in likes.likes] and \
-                self.post.author.did == self.client.me.did:
-                return True
-            if not lc:
-                break
-        return False
+    def is_self_liked(self, self_likes) -> bool:
+        """
+        Check if the author of the post has liked it.
+
+        Args:
+            self_likes (list): a list of self-liked posts, extracted from
+                               the feed archive
+        Returns:
+            bool: True if the author has liked the post, False otherwise.
+        """
+        return self.uri in [post['subject']['uri'] for post in self_likes]
     
     def __init__(self, client : Client):
         super(PostQualifier, self).__init__()
@@ -58,42 +81,86 @@ class PostQualifier(models.AppBskyFeedDefs.FeedViewPost):
         self.client = client
 
     def delete_like(self):
+        """
+        Remove a like from a post
+        """
         try:
-            self.client.delete_like(self.post.viewer.like)
-        except:
-            print(f"Failed to unlike: {self.post}")
+            logging.info(f"Removing like: {self.viewer.like}")
+            self.client.delete_like(self.viewer.like)
+        except httpx.HTTPStatusError as e:
+            logging.error(f"HTTP error occurred while unliking: {e}")
+        except Exception as e:
+            logging.error(f"An error occurred while unliking: {e}")
 
     def remove(self):
-        if self.post.author.did != self.client.me.did:
+        """
+        Remove a repost or delete an authored post
+        """
+        if self.author.did != self.client.me.did:
             try:
-                self.client.unrepost(self.post.viewer.repost)
-            except:
-                print(f"Failed to unrepost: {self.post}")
+                logging.info(f"Removing repost: {self.viewer.repost}")
+                self.client.unrepost(self.viewer.repost)
+            except httpx.HTTPStatusError as e:
+                logging.error(f"HTTP error occurred during unreposting: {e}")
+            except Exception as e:
+                logging.error(f"An error occurred during unreposting: {e}")
         else:
             try:
-                self.client.delete_post(self.post.uri)
-            except:
-                print(f"Failed to delete: {self.post.uri}")
+                logging.info(f"Removing post: {self.uri}")
+                self.client.delete_post(self.uri)
+            except httpx.HTTPStatusError as e:
+                logging.error(f"HTTP error occurred during deletion: {e}")
+            except Exception as e:
+                logging.error(f"An error occurred during deletion: {e}")
 
     @staticmethod
-    def to_delete(viral_threshold, stale_threshold, domains_to_protect, now, post):
+    def to_delete(viral_threshold, stale_threshold, domains_to_protect, now, self_likes, post):
+        """
+        Determine if a post should be deleted.
+        Args:
+            viral_threshold (int): The threshold for considering a post viral.
+            stale_threshold (int): The threshold for considering a post stale.
+            domains_to_protect (list): List of domains to protect.
+            now (datetime): The current time.
+            self_likes (list): List of self-liked posts extracted from
+                               the feed archive
+            post (PostQualifier): The post to evaluate.
+        Returns:
+            bool: True if the post should be deleted, False otherwise.
+        """
         if (post.is_viral(viral_threshold) or post.is_stale(stale_threshold, now)) and \
             not post.is_protected_domain(domains_to_protect) and \
-            not post.is_self_liked():
+            not post.is_self_liked(self_likes):
             return True
         return False
 
     @staticmethod
-    def to_unlike(stale_threshold, now, post):
-        return post.is_stale(stale_threshold, now) and \
-            not post.is_self_liked()
+    def to_remove(stale_threshold, now, post):
+        """
+        Determine if a post should be unliked.
+        Args:
+            stale_threshold (int): The threshold for considering a post stale.
+            now (datetime): The current time.
+            post (PostQualifier): The post to evaluate.
+        Returns:
+            bool: True if the post should be unliked, False otherwise.
+        """
+        return post.is_stale(stale_threshold, now)
     
     @staticmethod
-    def cast(client : Client, post : models.AppBskyFeedDefs.FeedViewPost):
+    def cast(client : Client, post : models.AppBskyFeedDefs.PostView):
+        """
+        Cast a post to a PostQualifier instance.
+        Args:
+            client (Client): The ATProto client.
+            post (models.AppBskyFeedDefs.FeedViewPost): The post to cast.
+        Returns:
+            PostQualifier: The casted post.
+        """
         post.__class__ = PostQualifier
         post._init_PostQualifier(client)
         return post
-
+    
 @dataclass
 class Credentials:
     login: str
@@ -109,65 +176,171 @@ class RequestCustomTimeout(Request):
 
 
 class SkeeterDeleter:
+    @staticmethod
+    def chunker(seq, size : int):
+        """
+        Break a iterable into segments of a given size
 
-    def gather_posts_to_unlike(self, stale_threshold, now, fixed_likes_cursor, **kwargs) -> list[PostQualifier]:
-        cursor = None
+        Args:
+            seq (iterable): The iterable to be broken into chunks
+            size (int): The chunk size
+        Returns:
+            list[iterable]: List of iterables of length at most size
+        """
+        return (seq[pos:pos + size] for pos in range(0, len(seq), size))
+    
+    @staticmethod
+    def extract_feed_item(archive, block):
+        """
+        Converts feed items from the repo with various structures into consistent blocks
+
+        Args:
+            archive: The repository as a binary CAR
+            block: The block to extract
+        Returns:
+            block: A decoded block
+        """
+        if '$type' in block:
+            return block
+        elif 'e' in block and len(block['e']) > 0:
+            return archive.blocks.get(CID.decode(block['e'][0]['v']))
+        else:
+            return block
+
+    def gather_likes(self,
+                     repo,
+                     stale_threshold,
+                     now,
+                     **kwargs) -> list[PostQualifier]:
+        archive = CAR.from_bytes(repo)
+        likes = list(map(partial(self.extract_feed_item, archive),
+                         filter(lambda x: 'app.bsky.feed.like' in str(x),
+                                [archive.blocks.get(cid) for cid in archive.blocks])))
+        
+        self_likes = list(filter(lambda x: archive.blocks.get(x['subject']['cid']),
+                                 filter(lambda x : self.client.me.did in x['subject']['uri'], likes)))
+        other_likes = list(filter(lambda x : self.client.me.did not in x['subject']['uri'], likes))
+        
+        # The API limits the get_posts method to 25 results at a time. 
         to_unlike = []
-        while True:
-            posts = self.client.app.bsky.feed.get_actor_likes(params={
-                "actor": self.client.me.handle,
-                "cursor": cursor,
-                "limit": 100
-                })
-            to_unlike.extend(list(filter(partial(PostQualifier.to_unlike, stale_threshold, now),
-                                         map(partial(PostQualifier.cast, self.client), posts.feed))))
-            
-            if cursor == posts.cursor or (fixed_likes_cursor and posts.cursor < fixed_likes_cursor):
-                break
-            else:
-                cursor = posts.cursor
-                if verbosity > 0:
-                    print(cursor)
-        return to_unlike
+        for batch in self.chunker(other_likes, 25):
+            try:
+                posts_to_unlike = self.client.get_posts(uris=[x['subject']['uri']
+                                                            for x in batch])
+                to_unlike.extend(
+                    list(filter(
+                        partial(PostQualifier.to_remove, stale_threshold, now),
+                        map(partial(PostQualifier.cast, self.client),
+                            posts_to_unlike.posts)
+                    ))
+                )
+            except httpx.HTTPStatusError as e:
+                logging.error(f"An HTTP error occured while fetching likes: {e}")
+            except Exception as e:
+                logging.error(f"An error occured while fetching likes: {e}")
 
-    def gather_posts_to_delete(self, viral_threshold, stale_threshold, domains_to_protect, now, **kwargs) -> list[PostQualifier]:
+        return self_likes, to_unlike
+
+    def gather_reposts(self,
+                       repo,
+                       viral_threshold,
+                       stale_threshold,
+                       domains_to_protect,
+                       now,
+                       self_likes,
+                       **kwargs) -> list[PostQualifier]:
+        archive = CAR.from_bytes(repo)
+        
+        reposts = list(
+            filter(lambda x : '$type' in x and
+                   "app.bsky.feed.repost" in str(x),
+                   [archive.blocks.get(cid) for cid in archive.blocks]
+            )
+        )
+        to_unrepost = []
+        for batch in self.chunker(reposts, 25):
+            try:
+                posts_to_remove = self.client.get_posts(uris=[x['subject']['uri']
+                                                            for x in batch])
+                to_unrepost.extend(
+                    list(filter(
+                        partial(PostQualifier.to_delete,
+                                viral_threshold,
+                                stale_threshold,
+                                domains_to_protect,
+                                now,
+                                self_likes),
+                        map(partial(PostQualifier.cast, self.client),
+                            posts_to_remove.posts)
+                    ))
+                )
+            except httpx.HTTPStatusError as e:
+                logging.error(f"An HTTP error occured while fetching reposts: {e}")
+            except Exception as e:
+                logging.error(f"An error occured while fetching reposts: {e}")
+        return to_unrepost
+
+    def gather_posts_to_delete(self,
+                               viral_threshold,
+                               stale_threshold,
+                               domains_to_protect,
+                               now,
+                               self_likes,
+                               **kwargs) -> list[PostQualifier]:
         cursor = None
         to_delete = []
         while True:
-            posts = self.client.get_author_feed(self.client.me.handle,
-                                                cursor=cursor,
-                                                filter="from:me",
-                                                limit=100)
-            delete_test = partial(PostQualifier.to_delete, viral_threshold, stale_threshold, domains_to_protect, now)
-            to_delete.extend(list(filter(delete_test,
-                                        map(partial(PostQualifier.cast, self.client), posts.feed))))
+            try:
+                posts = self.client.get_author_feed(self.client.me.handle,
+                                                    cursor=cursor,
+                                                    filter="from:me",
+                                                    limit=100)
+                delete_test = partial(PostQualifier.to_delete,
+                                    viral_threshold,
+                                    stale_threshold,
+                                    domains_to_protect,
+                                    now,
+                                    self_likes)
+                to_delete.extend(list(filter(
+                    delete_test,
+                    map(partial(PostQualifier.cast, self.client),
+                        [x.post for x in posts.feed]
+                    )
+                )))
 
-            cursor = posts.cursor
-            if self.verbosity > 0:
-                print(cursor)
+                cursor = posts.cursor
+                if self.verbosity > 0:
+                    print(f"Cursor at: {cursor}")
+            except httpx.HTTPStatusError as e:
+                logging.error(f"An HTTP error occured while fetching posts: {e}")
+            except Exception as e:
+                logging.error(f"An error occured while fetching posts: {e}")
             if cursor == None:
                 break
         return to_delete
 
     def batch_unlike_posts(self) -> None:
+        logging.info(f"Unliking {len(self.to_unlike)} post{'' if len(self.to_unlike) == 1 else 's'}")
         if self.verbosity > 0:
             print(f"Unliking {len(self.to_unlike)} post{'' if len(self.to_unlike) == 1 else 's'}")
         for post in rich.progress.track(self.to_unlike):
+            logging.info(f"Unliking: {post.uri} by {post.author.handle}, CID: {post.cid}")
             if self.verbosity == 2:
-                print(f"Unliking: {post.post.record.post} by {post.post.author.handle}, CID: {post.post.cid}")
+                print(f"Unliking: {post.uri} by {post.author.handle}, CID: {post.cid}")
             post.delete_like()
 
     def batch_delete_posts(self) -> None:
+        logging.info(f"Deleting {len(self.to_delete)} post{'' if len(self.to_delete) == 1 else 's'}")
         if self.verbosity > 0:
             print(f"Deleting {len(self.to_delete)} post{'' if len(self.to_delete) == 1 else 's'}")
         for post in rich.progress.track(self.to_delete):
+            logging.info(f"Deleting: {post.record.text} on {post.record.created_at}, CID: {post.cid}")
             if self.verbosity == 2:
-                print(f"Deleting: {post.post.record.post} on {post.post.record.created_at}, CID: {post.post.cid}")
+                print(f"Deleting: {post.record.text} on {post.record.created_at}, CID: {post.cid}")
             post.remove()
             
     def archive_repo(self, now, **kwargs):
         repo = self.client.com.atproto.sync.get_repo(params={'did': self.client.me.did})
-        car = CAR.from_bytes(repo)
         clean_user_did = self.client.me.did.replace(":", "_")
         Path(f"archive/{clean_user_did}/_blob/").mkdir(parents=True, exist_ok=True)
         print("Archiving posts...")
@@ -193,6 +366,8 @@ class SkeeterDeleter:
                     print(f"Saving {cid}{ext}")
                 f.write(blob)
 
+        return repo
+
     def __init__(self,
                  credentials : Credentials,
                  viral_threshold : int=0,
@@ -215,13 +390,19 @@ class SkeeterDeleter:
         self.verbosity = verbosity
         self.autodelete = autodelete
 
-        self.archive_repo(**params)
+        repo = self.archive_repo(**params)
 
-        self.to_unlike = self.gather_posts_to_unlike(**params)
+        self_likes, self.to_unlike = self.gather_likes(repo, **params)
         print(f"Found {len(self.to_unlike)} post{'' if len(self.to_unlike) == 1 else 's'} to unlike.")
+        
+        to_unrepost = self.gather_reposts(repo, self_likes=self_likes, **params)
+        print(f"Found {len(to_unrepost)} post{'' if len(to_unrepost) == 1 else 's'} to unrepost.")
 
-        self.to_delete = self.gather_posts_to_delete(**params)
+        self.to_delete = self.gather_posts_to_delete(self_likes=self_likes, **params)
         print(f"Found {len(self.to_delete)} post{'' if len(self.to_delete) == 1 else 's'} to delete.")
+
+        self.to_delete.extend(to_unrepost)
+
 
     def unlike(self):
         n_unlike = len(self.to_unlike)
@@ -249,7 +430,7 @@ Ignore or set to 0 to not set an upper limit. This feature deletes posts that ar
 Defaults to 0.""", default=0, type=int)
     parser.add_argument("-s", "--stale-limit", help="""The upper bound of the age of a post in days before it is deleted.
 Ignore or set to 0 to not set an upper limit. This feature deletes old posts that may be taken out of context or selectively
-misinterpreted, reducing potential harassment. Detaults to 0.""", default=0, type=int)
+misinterpreted, reducing potential harassment. Defaults to 0.""", default=0, type=int)
     parser.add_argument("-d", "--domains-to-protect", help="""A comma separated list of domain names to protect. Posts linking to
 domains in this list will not be auto-deleted regardless of age or virality. Default is empty.""", default="")
     parser.add_argument("-c", "--fixed-likes-cursor", help="""A complex setting. ATProto pagination through is awkward, and
@@ -281,6 +462,7 @@ default="")
         'verbosity': verbosity,
         'autodelete': args.yes
     }
+
     sd = SkeeterDeleter(credentials=creds, **params)
     sd.unlike()
     sd.delete()
