@@ -85,8 +85,8 @@ class PostQualifier(models.AppBskyFeedDefs.PostView):
         Remove a like from a post
         """
         try:
-            logging.info(f"Removing like: {self.uri}")
-            self.client.delete_like(self.uri)
+            logging.info(f"Removing like: {self.viewer.like}")
+            self.client.delete_like(self.viewer.like)
         except httpx.HTTPStatusError as e:
             logging.error(f"HTTP error occurred while unliking: {e}")
         except Exception as e:
