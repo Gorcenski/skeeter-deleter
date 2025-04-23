@@ -1,6 +1,6 @@
 on:
   schedule:
-  - cron: '* */6 * * *'
+  - cron: '25 */6 * * *'
   push:
     branches: ['main']
   
@@ -51,6 +51,7 @@ jobs:
         name: bsky-archive
         path: |
           archive
+          skeeter_deleter.log
 
     ## Use Azure Storage
     ## You'll need to set up an Azure account and create an Azure storage bucket

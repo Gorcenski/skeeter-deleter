@@ -89,6 +89,13 @@ class PostQualifier(models.AppBskyFeedDefs.PostView):
             self.client.delete_like(self.viewer.like)
         except httpx.HTTPStatusError as e:
             logging.error(f"HTTP error occurred while unliking: {e}")
+            try:
+                logging.info(f"Removing like via URI: {self.uri}")
+                self.client.delete_like(self.uri)
+            except httpx.HTTPStatusError as e:
+                logging.error(f"HTTP error occurred while unliking via URI: {e}")
+            except Exception as e:
+                raise e
         except Exception as e:
             logging.error(f"An error occurred while unliking: {e}")
 
