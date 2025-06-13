@@ -1,5 +1,9 @@
 archive/**
 skeeter_deleter.log
+data/
+logs/
+config/
+.env
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
