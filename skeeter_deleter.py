@@ -72,7 +72,18 @@ class PostQualifier(models.AppBskyFeedDefs.PostView):
             bool: True if the author has liked the post, False otherwise.
         """
         return self.uri in [post['subject']['uri'] for post in self_likes]
-    
+
+    def is_bookmarked(self, bookmarks) -> bool:
+        """
+        Check if the post is bookmarked.
+
+        Args:
+            bookmarks (list): a list of bookmarked posts, extracted from the feed archive
+        Returns:
+            bool: True if the post is bookmarked, False otherwise.
+        """
+        return self.uri in [bookmark.subject.uri for bookmark in bookmarks]
+
     def __init__(self, client : Client):
         super(PostQualifier, self).__init__()
         self._init_PostQualifier(client)
@@ -121,7 +132,7 @@ class PostQualifier(models.AppBskyFeedDefs.PostView):
                 logging.error(f"An error occurred during deletion: {e}")
 
     @staticmethod
-    def to_delete(viral_threshold, stale_threshold, domains_to_protect, now, self_likes, post):
+    def to_delete(viral_threshold, stale_threshold, domains_to_protect, now, self_likes, self_bookmarks, post):
         """
         Determine if a post should be deleted.
         Args:
@@ -137,7 +148,8 @@ class PostQualifier(models.AppBskyFeedDefs.PostView):
         """
         if (post.is_viral(viral_threshold) or post.is_stale(stale_threshold, now)) and \
             not post.is_protected_domain(domains_to_protect) and \
-            not post.is_self_liked(self_likes):
+            not post.is_self_liked(self_likes) and \
+            not post.is_bookmarked(self_bookmarks):
             return True
         return False
 
@@ -216,6 +228,7 @@ class SkeeterDeleter:
 
     def gather_likes(self,
                      repo,
+                     self_bookmarks,
                      stale_threshold,
                      now,
                      **kwargs) -> list[PostQualifier]:
@@ -228,6 +241,9 @@ class SkeeterDeleter:
                                  filter(lambda x : self.client.me.did in x['subject']['uri'], likes)))
         other_likes = list(filter(lambda x : self.client.me.did not in x['subject']['uri'], likes))
         
+        # Filter out likes that are bookmarked, as we don't want to unlike them
+        other_likes = list(filter(lambda x : x['subject']['uri'] not in [bookmark.subject.uri for bookmark in self_bookmarks], other_likes))
+
         # The API limits the get_posts method to 25 results at a time. 
         to_unlike = []
         for batch in self.chunker(other_likes, 25):
@@ -248,6 +264,10 @@ class SkeeterDeleter:
 
         return self_likes, to_unlike
 
+    def gather_bookmarks(self,
+                        **kwargs) -> list[PostQualifier]:
+        return self.client.app.bsky.bookmark.get_bookmarks().bookmarks
+
     def gather_reposts(self,
                        repo,
                        viral_threshold,
@@ -255,6 +275,7 @@ class SkeeterDeleter:
                        domains_to_protect,
                        now,
                        self_likes,
+                       self_bookmarks,
                        **kwargs) -> list[PostQualifier]:
         archive = CAR.from_bytes(repo)
         
@@ -276,7 +297,8 @@ class SkeeterDeleter:
                                 stale_threshold,
                                 domains_to_protect,
                                 now,
-                                self_likes),
+                                self_likes,
+                                self_bookmarks),
                         map(partial(PostQualifier.cast, self.client),
                             posts_to_remove.posts)
                     ))
@@ -293,6 +315,7 @@ class SkeeterDeleter:
                                domains_to_protect,
                                now,
                                self_likes,
+                               self_bookmarks,
                                **kwargs) -> list[PostQualifier]:
         cursor = None
         to_delete = []
@@ -307,7 +330,8 @@ class SkeeterDeleter:
                                     stale_threshold,
                                     domains_to_protect,
                                     now,
-                                    self_likes)
+                                    self_likes,
+                                    self_bookmarks)
                 to_delete.extend(list(filter(
                     delete_test,
                     map(partial(PostQualifier.cast, self.client),
@@ -399,13 +423,16 @@ class SkeeterDeleter:
 
         repo = self.archive_repo(**params)
 
-        self_likes, self.to_unlike = self.gather_likes(repo, **params)
+        self_bookmarks = self.gather_bookmarks(**params)
+        print(f"Found {len(self_bookmarks)} bookmarked post{'' if len(self_bookmarks) == 1 else 's'}.")
+        
+        self_likes, self.to_unlike = self.gather_likes(repo, self_bookmarks=self_bookmarks, **params)
         print(f"Found {len(self.to_unlike)} post{'' if len(self.to_unlike) == 1 else 's'} to unlike.")
         
-        to_unrepost = self.gather_reposts(repo, self_likes=self_likes, **params)
+        to_unrepost = self.gather_reposts(repo, self_likes=self_likes, self_bookmarks=self_bookmarks, **params)
         print(f"Found {len(to_unrepost)} post{'' if len(to_unrepost) == 1 else 's'} to unrepost.")
 
-        self.to_delete = self.gather_posts_to_delete(self_likes=self_likes, **params)
+        self.to_delete = self.gather_posts_to_delete(self_likes=self_likes, self_bookmarks=self_bookmarks, **params)
         print(f"Found {len(self.to_delete)} post{'' if len(self.to_delete) == 1 else 's'} to delete.")
 
         self.to_delete.extend(to_unrepost)

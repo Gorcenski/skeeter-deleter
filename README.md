@@ -15,7 +15,7 @@ This tool helps purge your profile so this can't happen, while also preserving a
 
 ### What if I want to keep some posts?
 
-The tool allows you to create a curated feed of your content. Simply "like" your own post and it will be marked for preservation. Beware: if you unlike the post, it may be deleted if you run this script again.
+The tool allows you to create a curated feed of your content. Simply "bookmark" any post or "like" your own post and it will be marked for preservation. Beware: if you unbookmark or unlike the post, it may be deleted if you run this script again.
 
 ### How does it work?
 
