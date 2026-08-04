@@ -1,39 +1,22 @@
-annotated-types==0.7.0
-anyio==4.4.0
-atproto==0.0.54
-Authlib==1.3.1
-certifi==2024.6.2
-cffi==1.16.0
-charset-normalizer==3.3.2
-click==8.1.7
-cryptography==42.0.8
-dataclasses-json==0.5.14
-dateutils==0.6.12
-dnspython==2.6.1
-exceptiongroup==1.2.1
-h11==0.14.0
-httpcore==1.0.5
-httpx==0.26.0
-idna==3.7
-libipld==2.0.0
-markdown-it-py==3.0.0
-marshmallow==3.21.3
-mdurl==0.1.2
-mypy-extensions==1.0.0
-packaging==24.1
-pycparser==2.22
-pydantic==2.7.4
-pydantic_core==2.18.4
-Pygments==2.18.0
+# Direct dependencies only — pip resolves the rest.
+#
+# This was previously a 39-line freeze pinning every transitive dependency, which
+# held the whole tree at atproto 0.0.54's era and left Dependabot nothing it could
+# bump without conflicts. Worse, 0.0.54 requires Python <3.13, so it will not
+# install at all on a 3.14 host.
+#
+# Verified working on Python 3.14 with atproto 0.0.69, which resolves to
+# httpx 0.28.1, pydantic 2.13.4, libipld 3.4.1, rich 15.0.0.
+#
+# Dropped as genuinely unused: python-twitter-v2 and requests (nothing in the repo
+# imports either), and dateutils — the code imports dateutil.parser, which comes
+# from python-dateutil, a different package. The remaining removals were atproto
+# 0.0.54 transitives that current atproto no longer needs.
+#
+# python-magic needs the system libmagic: apt-get install libmagic1
+
+atproto==0.0.69
+httpx==0.28.1
 python-dateutil==2.9.0.post0
 python-magic==0.4.27
-python-twitter-v2==0.9.1
-pytz==2024.1
-requests==2.32.3
-rich==13.7.1
-six==1.16.0
-sniffio==1.3.1
-typing-inspect==0.9.0
-typing_extensions==4.12.2
-urllib3==2.2.2
-websockets==12.0
+rich==15.0.0
