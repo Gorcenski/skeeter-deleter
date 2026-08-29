@@ -40,7 +40,7 @@ Activate your environment.
 Run the command with
 
 ```sh
-python skeeter-deleter.py
+python skeeter_deleter.py
 ```
 
 with the following command line options:
