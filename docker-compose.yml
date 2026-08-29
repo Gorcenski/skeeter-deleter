@@ -1,0 +1,19 @@
+services:
+  skeeter-deleter:
+    build: .
+    container_name: skeeter-deleter
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - BLUESKY_USERNAME=${BLUESKY_USERNAME}
+      - BLUESKY_PASSWORD=${BLUESKY_PASSWORD}
+      - EXCLUDED_DOMAINS=${EXCLUDED_DOMAINS}
+      - DELETE_AFTER_DAYS=${DELETE_AFTER_DAYS}
+    env_file:
+      - .env
+    command: ["python", "skeeter_deleter.py", "-s", "${DELETE_AFTER_DAYS}", "-d", "${EXCLUDED_DOMAINS}", "${AUTO_CONFIRM}", "${VERBOSE_MODE}",]
+
+# https://github.com/Gorcenski/skeeter-deleter
