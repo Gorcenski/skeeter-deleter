@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  skeeter-deleter:
+    build: .
+    container_name: skeeter-deleter
+    env_file:
+      - .env
+    volumes:
+      - ./archive:/app/archive
+    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "grep -q run_scheduler /proc/1/cmdline"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    labels:
+          - "com.centurylinklabs.watchtower.enable=false"

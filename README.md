@@ -63,6 +63,17 @@ with the following command line options:
 
 This could be run in a docker container in a Github action, in a cloud function, or in any other scheduled environment.
 
+### Dockerized scheduler
+
+The repository now ships with a small scheduler stack so you can run Skeeter Deleter in a long-lived container without wiring up your own cron job.
+
+1. Copy `.env.sample` to `.env` and fill in the required variables (`BLUESKY_USERNAME`, `BLUESKY_PASSWORD`, and at least one of `STALE_LIMIT_DAYS`/`MAX_REPOSTS`). Optional tuning flags in this file map directly to the CLI flags listed above.
+2. Build and launch the container with Docker Compose:
+   ```sh
+   docker compose up --build
+   ```
+   Add `-d` if you want it to run in the background.
+
 ## Future Roadmap
 
 A few features are planned:
